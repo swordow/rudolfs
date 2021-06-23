@@ -138,6 +138,9 @@ struct LocalArgs {
     /// created if it does not exist.
     #[structopt(long, env = "RUDOLFS_LOCAL_PATH")]
     path: PathBuf,
+
+    #[structopt(long, env = "RUDOLFS_LOCAL_BARE")]
+    bare: bool,
 }
 
 impl Args {
@@ -155,23 +158,22 @@ impl Args {
         logger_builder.init();
 
         // Find a socket address to bind to. This will resolve domain names.
-        let ret = self.global.host.to_socket_addrs();
-        let mut addr = None;
-        if ret.is_err() {
-            let hostAddr = format!("{}:{}", self.global.host, self.global.port);
-            addr = Some(
-                hostAddr
-                    .to_socket_addrs()?
-                    .next()
-                    .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 8080))),
-            );
-        } else {
-            addr = Some(
-                ret.unwrap()
-                    .next()
-                    .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 8080))),
-            );
-        }
+        let addr =
+            match self.global.host.to_socket_addrs() {
+                Ok(mut addrs_iter) => {
+                    Some(addrs_iter.next().unwrap_or_else(|| {
+                        SocketAddr::from(([0, 0, 0, 0], 8080))
+                    }))
+                }
+                Err(_) => {
+                    let host_addr =
+                        format!("{}:{}", self.global.host, self.global.port);
+                    Some(host_addr.to_socket_addrs()?.next().unwrap_or_else(
+                        || SocketAddr::from(([0, 0, 0, 0], 8080)),
+                    ))
+                }
+            };
+
         log::info!("Initializing storage...");
 
         match self.backend {
@@ -211,7 +213,8 @@ impl S3Args {
                     .value() as u64;
 
                 // Use disk storage as a cache.
-                let disk = Disk::new(cache_dir).map_err(Error::from).await?;
+                let disk =
+                    Disk::new(cache_dir, false).map_err(Error::from).await?;
 
                 #[cfg(feature = "faulty")]
                 let disk = Faulty::new(disk);
@@ -229,14 +232,16 @@ impl S3Args {
             }
             None => {
                 if global_args.key.is_none() {
-                    return Err(Box::new(error::VerifyKeyInvalidError {}));
+                    run_server(s3, &addr).await?;
+                } else {
+                    let storage = Verify::new(Encrypted::new(
+                        global_args.key.unwrap(),
+                        s3,
+                    ));
+                    run_server(storage, &addr).await?;
                 }
-                let storage =
-                    Verify::new(Encrypted::new(global_args.key.unwrap(), s3));
-                run_server(storage, &addr).await?;
             }
         }
-
         Ok(())
     }
 }
@@ -247,9 +252,10 @@ impl LocalArgs {
         addr: SocketAddr,
         global_args: GlobalArgs,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let storage = Disk::new(self.path).map_err(Error::from).await?;
+        let storage =
+            Disk::new(self.path, self.bare).map_err(Error::from).await?;
 
-        log::info!("Local disk storage initialized.");
+        log::info!("Local disk storage (bare={})initialized.", self.bare);
         // fix me: for mirroring repo the key is not right for the origin repo
         if global_args.key.is_none() {
             run_server(storage, &addr).await?;

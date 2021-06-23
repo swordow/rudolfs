@@ -38,24 +38,33 @@ use crate::util::NamedTempFile;
 
 pub struct Backend {
     root: PathBuf,
+    bare: bool,
 }
 
 impl Backend {
-    pub async fn new(root: PathBuf) -> Result<Self, io::Error> {
+    pub async fn new(root: PathBuf, bare: bool) -> Result<Self, io::Error> {
         fs::create_dir_all(&root).await?;
 
         // TODO: Clean out files in the "incomplete" folder?
-        Ok(Backend { root })
+        Ok(Backend { root, bare })
     }
 
     // Use sub directories in order to better utilize the file system's internal
     // tree data structure.
     fn key_to_path(&self, key: &StorageKey) -> PathBuf {
-        self.root.join(format!(
-            "{}/objects/{}",
-            key.namespace(),
-            key.oid().path()
-        ))
+        if self.bare {
+            self.root.join(format!(
+                "{}/objects/{}",
+                key.namespace(),
+                key.oid().path()
+            ))
+        } else {
+            self.root.join(format!(
+                "objects/{}/{}",
+                key.namespace(),
+                key.oid().path()
+            ))
+        }
     }
 }
 
