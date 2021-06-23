@@ -54,13 +54,13 @@ impl Backend {
     fn key_to_path(&self, key: &StorageKey) -> PathBuf {
         if self.bare {
             self.root.join(format!(
-                "{}/objects/{}",
+                "{}/info/lfs/objects/{}",
                 key.namespace(),
                 key.oid().path()
             ))
         } else {
             self.root.join(format!(
-                "objects/{}/{}",
+                "objects/{}/info/lfs/{}",
                 key.namespace(),
                 key.oid().path()
             ))

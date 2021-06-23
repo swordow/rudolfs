@@ -67,23 +67,23 @@ pub type ByteStream = Pin<
 /// pruning old LFS objects from permanent storage.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct Namespace {
-    org: String,
+    user: String,
     project: String,
 }
 
 impl Namespace {
-    pub fn new(org: String, project: String) -> Self {
+    pub fn new(user: String, project: String) -> Self {
         // TODO: Ensure that the strings do not contain any illegal paths.
-        Namespace { org, project }
+        Namespace { user, project }
     }
 
     #[allow(unused)]
     pub fn into_parts(self) -> (String, String) {
-        (self.org, self.project)
+        (self.user, self.project)
     }
 
-    pub fn org(&self) -> &str {
-        &self.org
+    pub fn user(&self) -> &str {
+        &self.user
     }
 
     pub fn project(&self) -> &str {
@@ -93,7 +93,7 @@ impl Namespace {
 
 impl fmt::Display for Namespace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}/{}", self.org(), self.project())
+        write!(f, "{}/{}", self.user(), self.project())
     }
 }
 

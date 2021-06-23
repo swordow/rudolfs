@@ -115,11 +115,11 @@ where
 
         // Extract the namespace.
         // namespace format:
-        // repo/lfs/objects/xx/xx/xxxxxxxxxxxxxxxxxxxxxxxxx
-        // then namespace is : (repo, lfs)
+        // user/repo/info/lfs/objects/xx/xx/xxxxxxxxxxxxxxxxxxxxxxxxx
+        // then namespace is : (user, repo)
         let namespace = match (parts.next(), parts.next()) {
-            (Some(org), Some(project)) => {
-                Namespace::new(org.into(), project.into())
+            (Some(user), Some(project)) => {
+                Namespace::new(user.into(), project.into())
             }
             _ => {
                 return Ok(Response::builder()
@@ -127,6 +127,9 @@ where
                     .body(Body::from("Missing org/project in URL"))?)
             }
         };
+        
+        assert_eq!(parts.next(), Some("info"));
+        assert_eq!(parts.next(), Some("lfs"));
 
         match parts.next() {
             Some("object") => {
@@ -388,7 +391,7 @@ where
                                 .await
                                 .unwrap_or_else(|| {
                                     format!(
-                                        "{}api/{}/object/{}",
+                                        "{}api/{}/info/lfs/object/{}",
                                         uri, namespace, object.oid
                                     )
                                 }),
@@ -398,7 +401,7 @@ where
                         }),
                         verify: Some(lfs::Action {
                             href: format!(
-                                "{}api/{}/objects/verify",
+                                "{}api/{}/info/lfs/objects/verify",
                                 uri, namespace
                             ),
                             header: None,
@@ -427,7 +430,7 @@ where
                                 ))
                                 .unwrap_or_else(|| {
                                     format!(
-                                        "{}api/{}/object/{}",
+                                        "{}api/{}/info/lfs/object/{}",
                                         uri, namespace, object.oid
                                     )
                                 }),
