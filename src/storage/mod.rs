@@ -301,10 +301,7 @@ where
         self.as_ref().upload_url(key, expires_in).await
     }
 
-    async fn verify_url(
-        &self,
-        key: &StorageKey
-    ) -> Option<String> {
+    async fn verify_url(&self, key: &StorageKey) -> Option<String> {
         self.as_ref().verify_url(key).await
     }
 }
