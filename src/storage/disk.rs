@@ -38,15 +38,24 @@ use crate::util::NamedTempFile;
 
 pub struct Backend {
     root: PathBuf,
+    proxy_url: Option<String>,
     bare: bool,
 }
 
 impl Backend {
-    pub async fn new(root: PathBuf, bare: bool) -> Result<Self, io::Error> {
+    pub async fn new(
+        root: PathBuf,
+        proxy_url: Option<String>,
+        bare: bool,
+    ) -> Result<Self, io::Error> {
         fs::create_dir_all(&root).await?;
 
         // TODO: Clean out files in the "incomplete" folder?
-        Ok(Backend { root, bare })
+        Ok(Backend {
+            root,
+            proxy_url,
+            bare,
+        })
     }
 
     // Use sub directories in order to better utilize the file system's internal
@@ -260,6 +269,14 @@ impl Storage for Backend {
     }
 
     fn public_url(&self, _key: &StorageKey) -> Option<String> {
+        if self.proxy_url.is_some() {
+            return Some(format!(
+                "{}api/{}/info/lfs/object/{}",
+                self.proxy_url.as_ref().unwrap(),
+                _key.namespace(),
+                _key.oid()
+            ));
+        }
         None
     }
 
@@ -268,6 +285,14 @@ impl Storage for Backend {
         _key: &StorageKey,
         _expires_in: Duration,
     ) -> Option<String> {
+        if self.proxy_url.is_some() {
+            return Some(format!(
+                "{}api/{}/info/lfs/object/{}",
+                self.proxy_url.as_ref().unwrap(),
+                _key.namespace(),
+                _key.oid()
+            ));
+        }
         None
     }
 }

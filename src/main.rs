@@ -141,6 +141,10 @@ struct LocalArgs {
 
     #[structopt(long, env = "RUDOLFS_LOCAL_BARE")]
     bare: bool,
+
+    // proxy url must ends with '/'
+    #[structopt(long, env = "RUDOLFS_LOCAL_PROXY_URL")]
+    proxy_url: Option<String>,
 }
 
 impl Args {
@@ -213,8 +217,9 @@ impl S3Args {
                     .value() as u64;
 
                 // Use disk storage as a cache.
-                let disk =
-                    Disk::new(cache_dir, false).map_err(Error::from).await?;
+                let disk = Disk::new(cache_dir, None, false)
+                    .map_err(Error::from)
+                    .await?;
 
                 #[cfg(feature = "faulty")]
                 let disk = Faulty::new(disk);
@@ -252,8 +257,9 @@ impl LocalArgs {
         addr: SocketAddr,
         global_args: GlobalArgs,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let storage =
-            Disk::new(self.path, self.bare).map_err(Error::from).await?;
+        let storage = Disk::new(self.path, self.proxy_url, self.bare)
+            .map_err(Error::from)
+            .await?;
 
         log::info!("Local disk storage (bare={})initialized.", self.bare);
         // fix me: for mirroring repo the key is not right for the origin repo

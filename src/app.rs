@@ -127,7 +127,7 @@ where
                     .body(Body::from("Missing org/project in URL"))?)
             }
         };
-        
+
         assert_eq!(parts.next(), Some("info"));
         assert_eq!(parts.next(), Some("lfs"));
 
