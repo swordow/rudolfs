@@ -400,4 +400,8 @@ where
     ) -> Option<String> {
         self.storage.upload_url(key, expires_in).await
     }
+
+    async fn verify_url(&self, _key: &StorageKey) -> Option<String> {
+         self.storage.verify_url(key).await
+    }
 }

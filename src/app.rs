@@ -400,10 +400,18 @@ where
                             expires_at: None,
                         }),
                         verify: Some(lfs::Action {
-                            href: format!(
-                                "{}api/{}/info/lfs/objects/verify",
-                                uri, namespace
-                            ),
+                            href: storage
+                                .verify_url(&StorageKey::new(
+                                    namespace.clone(),
+                                    object.oid,
+                                ))
+                                .await
+                                .unwrap_or_else(|| {
+                                    format!(
+                                        "{}api/{}/info/lfs/objects/verify",
+                                        uri, namespace
+                                    )
+                                }),
                             header: None,
                             expires_in: None,
                             expires_at: None,

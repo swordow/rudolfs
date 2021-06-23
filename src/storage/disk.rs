@@ -295,6 +295,17 @@ impl Storage for Backend {
         }
         None
     }
+
+    async fn verify_url(&self, _key: &StorageKey) -> Option<String> {
+        if self.proxy_url.is_some() {
+            return Some(format!(
+                "{}api/{}/info/lfs/objects/verify",
+                self.proxy_url.as_ref().unwrap(),
+                _key.namespace()
+            ));
+        }
+        None
+    }
 }
 
 /// A simple bytes codec that keeps track of its length.

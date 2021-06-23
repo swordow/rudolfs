@@ -360,4 +360,8 @@ where
         );
         Some(presigned_url)
     }
+
+    async fn verify_url(&self, _key: &StorageKey) -> Option<String> {
+        None
+    }
 }

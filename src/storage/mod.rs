@@ -235,6 +235,9 @@ pub trait Storage {
         key: &StorageKey,
         expires_in: Duration,
     ) -> Option<String>;
+
+    /// Returns a verified URL
+    async fn verify_url(&self, key: &StorageKey) -> Option<String>;
 }
 
 #[async_trait]
@@ -296,5 +299,12 @@ where
         expires_in: Duration,
     ) -> Option<String> {
         self.as_ref().upload_url(key, expires_in).await
+    }
+
+    async fn verify_url(
+        &self,
+        key: &StorageKey
+    ) -> Option<String> {
+        self.as_ref().verify_url(key).await
     }
 }
