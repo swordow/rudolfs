@@ -1,6 +1,17 @@
 # Changelog
 
-## v0.3.3
+## WIP: v0.3.5
+
+ - Support X-Forwarded-Host headers to work better with load balancers. #31
+
+## v0.3.4
+
+ - Fixed the S3 backend: 1c0d6c7e2638963e6755669c6013daae2fe47ee7
+ - Added integration tests.
+ - Add additional warnings when the `--cdn` flag is used with encryption or
+   caching.
+
+## v0.3.3 -- Yanked
 
  - Added S3 signed URL support (#27)
 
