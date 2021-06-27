@@ -306,10 +306,19 @@ impl Storage for Backend {
         _expires_in: Duration,
     ) -> Option<String> {
         if self.proxy_url.is_some() {
+            if self.url_keep_user
+            {
+                return Some(format!(
+                    "{}{}/info/lfs/object/{}",
+                    self.proxy_url.as_ref().unwrap(),
+                    _key.namespace(),
+                    _key.oid()
+                ));
+            }
             return Some(format!(
-                "{}api/{}/info/lfs/object/{}",
+                "{}{}/info/lfs/object/{}",
                 self.proxy_url.as_ref().unwrap(),
-                _key.namespace(),
+                _key.namespace().project(),
                 _key.oid()
             ));
         }
@@ -318,10 +327,18 @@ impl Storage for Backend {
 
     async fn verify_url(&self, _key: &StorageKey) -> Option<String> {
         if self.proxy_url.is_some() {
+            if self.url_keep_user
+            {
+                return Some(format!(
+                    "{}{}/info/lfs/objects/verify",
+                    self.proxy_url.as_ref().unwrap(),
+                    _key.namespace()
+                ));
+            }
             return Some(format!(
-                "{}api/{}/info/lfs/objects/verify",
+                "{}{}/info/lfs/objects/verify",
                 self.proxy_url.as_ref().unwrap(),
-                _key.namespace()
+                _key.namespace().project()
             ));
         }
         None
