@@ -122,15 +122,15 @@ struct LocalArgs {
     #[structopt(long, env = "RUDOLFS_LOCAL_PATH")]
     path: PathBuf,
 
-    #[structopt(long, env = "RUDOLFS_LOCAL_BARE")]
+    #[structopt(long, env = "RUDOLFS_LOCAL_BARE", parse(try_from_str), default_value="false")]
     bare: bool,
 
     // proxy url must ends with '/'
     #[structopt(long, env = "RUDOLFS_LOCAL_PROXY_URL")]
     proxy_url: Option<String>,
 
-    #[structopt(long, env = "RUDOLFS_LOCAL_URL_KEEP_USEER")]
-    url_keep_user: bool,
+    #[structopt(long, env = "RUDOLFS_LOCAL_URL_KEEP_USEER", parse(try_from_str), default_value="false")]
+    proxy_url_keep_org: bool,
 }
 
 impl Args {
@@ -212,7 +212,7 @@ impl LocalArgs {
             self.path,
             global_args.key,
             self.proxy_url,
-            self.url_keep_user,
+            self.proxy_url_keep_org,
             self.bare,
         );
 

@@ -39,7 +39,7 @@ use crate::util::NamedTempFile;
 pub struct Backend {
     root: PathBuf,
     proxy_url: Option<String>,
-    url_keep_user:bool,
+    proxy_url_keep_org:bool,
     bare: bool,
 }
 
@@ -47,7 +47,7 @@ impl Backend {
     pub async fn new(
         root: PathBuf,
         proxy_url: Option<String>,
-        url_keep_user:bool,
+        proxy_url_keep_org:bool,
         bare: bool,
     ) -> Result<Self, io::Error> {
         fs::create_dir_all(&root).await?;
@@ -56,7 +56,7 @@ impl Backend {
         Ok(Backend {
             root,
             proxy_url,
-            url_keep_user,
+            proxy_url_keep_org,
             bare,
         })
     }
@@ -281,7 +281,7 @@ impl Storage for Backend {
         //     ));
         // }
         if self.proxy_url.is_some() {
-            if self.url_keep_user
+            if self.proxy_url_keep_org
             {
                 return Some(format!(
                     "{}{}/info/lfs/object/{}",
@@ -306,7 +306,7 @@ impl Storage for Backend {
         _expires_in: Duration,
     ) -> Option<String> {
         if self.proxy_url.is_some() {
-            if self.url_keep_user
+            if self.proxy_url_keep_org
             {
                 return Some(format!(
                     "{}{}/info/lfs/object/{}",
@@ -327,7 +327,7 @@ impl Storage for Backend {
 
     async fn verify_url(&self, _key: &StorageKey) -> Option<String> {
         if self.proxy_url.is_some() {
-            if self.url_keep_user
+            if self.proxy_url_keep_org
             {
                 return Some(format!(
                     "{}{}/info/lfs/objects/verify",

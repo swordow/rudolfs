@@ -134,11 +134,11 @@ where
 
         // Extract the namespace.
         // namespace format:
-        // user/repo/info/lfs/objects/xx/xx/xxxxxxxxxxxxxxxxxxxxxxxxx
-        // then namespace is : (user, repo)
+        // org/repo/info/lfs/objects/xx/xx/xxxxxxxxxxxxxxxxxxxxxxxxx
+        // then namespace is : (org, repo)
         let namespace = match (parts.next(), parts.next()) {
-            (Some(user), Some(project)) => {
-                Namespace::new(user.into(), project.into())
+            (Some(org), Some(project)) => {
+                Namespace::new(org.into(), project.into())
             }
             _ => {
                 return Ok(Response::builder()

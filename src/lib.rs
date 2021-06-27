@@ -218,7 +218,7 @@ pub struct LocalServerBuilder {
     path: PathBuf,
     key: Option<[u8; 32]>,
     proxy_url: Option<String>,
-    url_keep_user: bool,
+    proxy_url_keep_org: bool,
     cache: Option<Cache>,
     bare: bool,
 }
@@ -230,14 +230,14 @@ impl LocalServerBuilder {
         path: PathBuf,
         key: Option<[u8; 32]>,
         proxy_url: Option<String>,
-        url_keep_user:bool,
+        proxy_url_keep_org:bool,
         bare: bool,
     ) -> Self {
         Self {
             path,
             key,
             proxy_url,
-            url_keep_user,
+            proxy_url_keep_org,
             cache: None,
             bare,
         }
@@ -266,7 +266,8 @@ impl LocalServerBuilder {
         addr: SocketAddr,
     ) -> Result<Box<dyn Server + Unpin + Send>, Box<dyn std::error::Error>>
     {
-        let storage = Disk::new(self.path, self.proxy_url, self.url_keep_user, self.bare)
+        log::info!("--path:{:?} --proxy_url:{:?} --proxy_url_keep_org:{} --bare:{}", &self.path, &self.proxy_url, &self.proxy_url_keep_org, &self.bare);
+        let storage = Disk::new(self.path, self.proxy_url, self.proxy_url_keep_org, self.bare)
             .map_err(Error::from)
             .await?;
 
