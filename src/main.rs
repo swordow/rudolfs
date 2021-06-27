@@ -129,7 +129,7 @@ struct LocalArgs {
     #[structopt(long, env = "RUDOLFS_LOCAL_PROXY_URL")]
     proxy_url: Option<String>,
 
-    #[structopt(long, env = "RUDOLFS_LOCAL_URL_KEEP_USEER", parse(try_from_str), default_value="false")]
+    #[structopt(long, env = "RUDOLFS_LOCAL_URL_KEEP_USEER", parse(try_from_str), default_value="true")]
     proxy_url_keep_org: bool,
 }
 
