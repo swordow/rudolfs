@@ -97,10 +97,29 @@ where
     }
 
     /// Generates a "404 not found" response.
-    fn not_found(_req: Request<Body>) -> Result<Response<Body>, Error> {
+    fn not_found(_req: Request<Body>, msg: Option<String>) -> Result<Response<Body>, Error> {
+        let response = lfs::ResponseError
+        {
+            message: msg.unwrap_or("Not Found".to_string()),
+            documentation_url: Some(_req.uri().to_string()),
+            request_id: None
+        };
         Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
-            .body("Not found".into())?)
+            .body(into_json(&response)?)?)
+    }
+
+    /// Generates a "501 not implemented" response.
+    fn not_implemented(_req: Request<Body>, msg: Option<String>) -> Result<Response<Body>, Error> {
+        let response = lfs::ResponseError
+        {
+            message: msg.unwrap_or("Not Implemented".to_string()),
+            documentation_url: Some(_req.uri().to_string()),
+            request_id: None
+        };
+        Ok(Response::builder()
+            .status(StatusCode::NOT_IMPLEMENTED)
+            .body(into_json(&response)?)?)
     }
 
     /// Handles `/api` routes.
@@ -128,40 +147,51 @@ where
             }
         };
 
-        assert_eq!(parts.next(), Some("info"));
-        assert_eq!(parts.next(), Some("lfs"));
-
-        match parts.next() {
-            Some("object") => {
-                // Upload or download a single object.
-                let oid = parts.next().and_then(|x| x.parse::<lfs::Oid>().ok());
-                let oid = match oid {
-                    Some(oid) => oid,
-                    None => {
-                        return Ok(Response::builder()
-                            .status(StatusCode::BAD_REQUEST)
-                            .body(Body::from("Missing OID parameter."))?)
+        match parts.next()
+        {
+            Some("info")=>
+            {
+                match parts.next()
+                {
+                    Some("lfs") =>
+                    {
+                        match parts.next() {
+                            Some("object") => {
+                                // Upload or download a single object.
+                                let oid = parts.next().and_then(|x| x.parse::<lfs::Oid>().ok());
+                                let oid = match oid {
+                                    Some(oid) => oid,
+                                    None => {
+                                        return Ok(Response::builder()
+                                            .status(StatusCode::BAD_REQUEST)
+                                            .body(Body::from("Missing OID parameter."))?)
+                                    }
+                                };
+                
+                                let key = StorageKey::new(namespace, oid);
+                
+                                match *req.method() {
+                                    Method::GET => Self::download(storage, req, key).await,
+                                    Method::PUT => Self::upload(storage, req, key).await,
+                                    _ => Self::not_implemented(req, None),
+                                }
+                            }
+                            Some("objects") => match (req.method(), parts.next()) {
+                                (&Method::POST, Some("batch")) => {
+                                    Self::batch(storage, req, namespace).await
+                                }
+                                (&Method::POST, Some("verify")) => {
+                                    Self::verify(storage, req, namespace).await
+                                }
+                                _ => Self::not_implemented(req, None),
+                            },
+                            _ => Self::not_implemented(req, None),
+                        }
                     }
-                };
-
-                let key = StorageKey::new(namespace, oid);
-
-                match *req.method() {
-                    Method::GET => Self::download(storage, req, key).await,
-                    Method::PUT => Self::upload(storage, req, key).await,
-                    _ => Self::not_found(req),
+                    _ => Self::not_implemented(req, None)
                 }
             }
-            Some("objects") => match (req.method(), parts.next()) {
-                (&Method::POST, Some("batch")) => {
-                    Self::batch(storage, req, namespace).await
-                }
-                (&Method::POST, Some("verify")) => {
-                    Self::verify(storage, req, namespace).await
-                }
-                _ => Self::not_found(req),
-            },
-            _ => Self::not_found(req),
+            _ => Self::not_implemented(req, None)
         }
     }
 
@@ -488,7 +518,7 @@ where
         } else if req.uri().path().starts_with("/api/") {
             Box::pin(Self::api(self.storage.clone(), req))
         } else {
-            Box::pin(future::ready(Self::not_found(req)))
+            Box::pin(future::ready(Self::not_found(req, None)))
         }
     }
 }

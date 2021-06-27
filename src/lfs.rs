@@ -198,3 +198,17 @@ pub struct VerifyRequest {
     /// then an error code should be returned.
     pub size: u64,
 }
+
+/// A error response for lfs
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResponseError {
+    //String error message.
+    pub message: String,
+
+    //Optional String to give the user a place to report errors.
+    pub documentation_url: Option<String>,
+
+    //Optional String unique identifier for the request. Useful for debugging.
+    pub request_id:Option<String>
+}
+
