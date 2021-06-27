@@ -128,6 +128,9 @@ struct LocalArgs {
     // proxy url must ends with '/'
     #[structopt(long, env = "RUDOLFS_LOCAL_PROXY_URL")]
     proxy_url: Option<String>,
+
+    #[structopt(long, env = "RUDOLFS_LOCAL_URL_KEEP_USEER")]
+    url_keep_user: bool,
 }
 
 impl Args {
@@ -209,6 +212,7 @@ impl LocalArgs {
             self.path,
             global_args.key,
             self.proxy_url,
+            self.url_keep_user,
             self.bare,
         );
 

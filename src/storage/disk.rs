@@ -39,6 +39,7 @@ use crate::util::NamedTempFile;
 pub struct Backend {
     root: PathBuf,
     proxy_url: Option<String>,
+    url_keep_user:bool,
     bare: bool,
 }
 
@@ -46,6 +47,7 @@ impl Backend {
     pub async fn new(
         root: PathBuf,
         proxy_url: Option<String>,
+        url_keep_user:bool,
         bare: bool,
     ) -> Result<Self, io::Error> {
         fs::create_dir_all(&root).await?;
@@ -54,6 +56,7 @@ impl Backend {
         Ok(Backend {
             root,
             proxy_url,
+            url_keep_user,
             bare,
         })
     }
@@ -269,11 +272,28 @@ impl Storage for Backend {
     }
 
     fn public_url(&self, _key: &StorageKey) -> Option<String> {
+        // if self.proxy_url.is_some() {
+        //     return Some(format!(
+        //         "{}api/{}/info/lfs/object/{}",
+        //         self.proxy_url.as_ref().unwrap(),
+        //         _key.namespace(),
+        //         _key.oid()
+        //     ));
+        // }
         if self.proxy_url.is_some() {
+            if self.url_keep_user
+            {
+                return Some(format!(
+                    "{}{}/info/lfs/object/{}",
+                    self.proxy_url.as_ref().unwrap(),
+                    _key.namespace(),
+                    _key.oid()
+                ));
+            }
             return Some(format!(
-                "{}api/{}/info/lfs/object/{}",
+                "{}{}/info/lfs/object/{}",
                 self.proxy_url.as_ref().unwrap(),
-                _key.namespace(),
+                _key.namespace().project(),
                 _key.oid()
             ));
         }

@@ -166,7 +166,7 @@ impl S3ServerBuilder {
         match self.cache {
             Some(cache) => {
                 // Use disk storage as a cache.
-                let disk = Disk::new(cache.dir, None, false)
+                let disk = Disk::new(cache.dir, None, false, false)
                     .map_err(Error::from)
                     .await?;
 
@@ -218,6 +218,7 @@ pub struct LocalServerBuilder {
     path: PathBuf,
     key: Option<[u8; 32]>,
     proxy_url: Option<String>,
+    url_keep_user: bool,
     cache: Option<Cache>,
     bare: bool,
 }
@@ -229,12 +230,14 @@ impl LocalServerBuilder {
         path: PathBuf,
         key: Option<[u8; 32]>,
         proxy_url: Option<String>,
+        url_keep_user:bool,
         bare: bool,
     ) -> Self {
         Self {
             path,
             key,
             proxy_url,
+            url_keep_user,
             cache: None,
             bare,
         }
@@ -263,7 +266,7 @@ impl LocalServerBuilder {
         addr: SocketAddr,
     ) -> Result<Box<dyn Server + Unpin + Send>, Box<dyn std::error::Error>>
     {
-        let storage = Disk::new(self.path, self.proxy_url, self.bare)
+        let storage = Disk::new(self.path, self.proxy_url, self.url_keep_user, self.bare)
             .map_err(Error::from)
             .await?;
 
