@@ -205,7 +205,12 @@ impl LocalArgs {
         addr: SocketAddr,
         global_args: GlobalArgs,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut builder = LocalServerBuilder::new(self.path, global_args.key);
+        let mut builder = LocalServerBuilder::new(
+            self.path,
+            global_args.key,
+            self.proxy_url,
+            self.bare,
+        );
 
         if let Some(cache_dir) = global_args.cache_dir {
             let max_cache_size = global_args
