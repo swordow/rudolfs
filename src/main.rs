@@ -97,6 +97,26 @@ struct GlobalArgs {
         env = "RUDOLFS_LOG"
     )]
     log_level: log::LevelFilter,
+
+    // https something
+    #[structopt(
+        long,
+        env = "RUDOLFS_ENABLE_HTTPS",
+        parse(try_from_str), default_value="false"
+    )]
+    enable_https: bool,
+
+    #[structopt(
+        long,
+        env = "RUDOLFS_SSL_CERT"
+    )]
+    ssl_cert: Option<String>,
+    
+    #[structopt(
+        long,
+        env = "RUDOLFS_SSL_KEY"
+    )]
+    ssl_key: Option<String>
 }
 
 #[derive(StructOpt)]
@@ -223,7 +243,11 @@ impl LocalArgs {
                 .value() as u64;
             builder.cache(Cache::new(cache_dir, max_cache_size));
         }
-
+        
+        if global_args.enable_https
+        {
+            return builder.run_https(addr, global_args.enable_https, global_args.ssl_cert, global_args.ssl_key).await;
+        }
         builder.run(addr).await
     }
 }

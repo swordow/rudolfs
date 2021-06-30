@@ -31,8 +31,21 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::fs;
+use std::io;
+use std::pin::Pin;
+use futures_util;
+use async_stream::stream;
+use rustls;
+use rustls::internal::pemfile;
+use core::task::{Context, Poll};
+use std::vec::Vec;
+use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::server::TlsStream;
+use tokio_rustls::TlsAcceptor;
 
 use futures::future::{self, Future, TryFutureExt};
+use futures::stream::Stream;
 use hyper::{
     self,
     server::conn::{AddrIncoming, AddrStream},
@@ -198,6 +211,82 @@ impl S3ServerBuilder {
         }
     }
 
+    /// Spawns the server. The server must be awaited on in order to accept
+    /// incoming client connections and run.
+    pub async fn spawn_https(
+        mut self,
+        addr: SocketAddr,
+        enable_https:bool,
+        ssl_cert:Option<String>,
+        ssl_key:Option<String>
+    ) -> Result<(), Box<dyn std::error::Error>>
+    {
+        let prefix = self.prefix.unwrap_or_else(|| String::from("lfs"));
+
+        if self.cdn.is_some() {
+            log::warn!(
+                "A CDN was specified. Since uploads and downloads do not flow \
+                 through Rudolfs in this case, they will *not* be encrypted."
+            );
+
+            if let Some(_) = self.cache.take() {
+                log::warn!(
+                    "A local disk cache does not work with a CDN and will be \
+                     disabled."
+                );
+            }
+        }
+
+        let s3 = S3::new(self.bucket, prefix, self.cdn)
+            .map_err(Error::from)
+            .await?;
+
+        // Retry certain operations to S3 to make it more reliable.
+        let s3 = Retrying::new(s3);
+
+        // Add a little instability for testing purposes.
+        #[cfg(feature = "faulty")]
+        let s3 = Faulty::new(s3);
+
+        match self.cache {
+            Some(cache) => {
+                // Use disk storage as a cache.
+                let disk = Disk::new(cache.dir, None, false, false)
+                    .map_err(Error::from)
+                    .await?;
+
+                #[cfg(feature = "faulty")]
+                let disk = Faulty::new(disk);
+
+                let cache = Cached::new(cache.max_size, disk, s3).await?;
+
+                if self.key.is_none() {
+                    spawn_server_https(cache, &addr, enable_https, ssl_cert, ssl_key).await?;
+                    return Ok(());
+                }
+
+                let storage = Verify::new(Encrypted::new(
+                    self.key.as_ref().unwrap().clone(),
+                    cache,
+                ));
+                spawn_server_https(storage, &addr, enable_https, ssl_cert, ssl_key).await?;
+                Ok(())
+            }
+            None => {
+                if self.key.is_none() {
+                    spawn_server_https(s3, &addr, enable_https, ssl_cert, ssl_key).await?;
+                    return Ok(());
+                }
+                let storage = Verify::new(Encrypted::new(
+                    self.key.as_ref().unwrap().clone(),
+                    s3,
+                ));
+                spawn_server_https(storage, &addr, enable_https, ssl_cert, ssl_key).await?;
+                Ok(())
+            }
+        }
+    }
+
     /// Spawns the server and runs it to completion. This will run forever
     /// unless there is an error or the server shuts down gracefully.
     pub async fn run(
@@ -284,6 +373,36 @@ impl LocalServerBuilder {
         Ok(Box::new(spawn_server(storage, &addr)))
     }
 
+    /// Spawns the server. The server must be awaited on in order to accept
+    /// incoming client connections and run.
+    pub async fn spawn_https(
+        self,
+        addr: SocketAddr,
+        enable_https:bool,
+        ssl_cert:Option<String>,
+        ssl_key:Option<String>
+    ) -> Result<(), Box<dyn std::error::Error>>
+    {
+        log::info!("--path:{:?} --proxy_url:{:?} --proxy_url_keep_org:{} --bare:{}", &self.path, &self.proxy_url, &self.proxy_url_keep_org, &self.bare);
+        let storage = Disk::new(self.path, self.proxy_url, self.proxy_url_keep_org, self.bare)
+            .map_err(Error::from)
+            .await?;
+
+        log::info!("Local disk storage initialized.");
+
+        if self.key.is_none() {
+            spawn_server_https(storage, &addr, enable_https, ssl_cert, ssl_key).await?;
+            return Ok(());
+        }
+
+        let storage = Verify::new(Encrypted::new(
+            self.key.as_ref().unwrap().clone(),
+            storage,
+        ));
+        spawn_server_https(storage, &addr, enable_https, ssl_cert, ssl_key).await?;
+        return Ok(());
+    }
+
     /// Spawns the server and runs it to completion. This will run forever
     /// unless there is an error or the server shuts down gracefully.
     pub async fn run(
@@ -297,6 +416,67 @@ impl LocalServerBuilder {
         server.await?;
         Ok(())
     }
+    pub async fn run_https(
+        self,
+        addr: SocketAddr,
+        enable_https:bool,
+        ssl_cert:Option<String>,
+        ssl_key:Option<String>
+    ) -> Result<(), Box<dyn std::error::Error>> {
+
+        log::info!("Listening on {}", addr);
+        self.spawn_https(addr, enable_https, ssl_cert, ssl_key).await?;
+        Ok(())
+    }
+}
+
+
+
+// copied from https://github.com/rustls/hyper-rustls/blob/master/examples/server.rs
+fn io_error(err: String) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, err)
+}
+// Load public certificate from file.
+fn load_certs(filename: &str) -> io::Result<Vec<rustls::Certificate>> {
+    // Open certificate file.
+    let certfile = fs::File::open(filename)
+        .map_err(|e| io_error(format!("failed to open {}: {}", filename, e).into()))?;
+    let mut reader = io::BufReader::new(certfile);
+
+    // Load and return certificate.
+    pemfile::certs(&mut reader).map_err(|_| io_error("failed to load certificate".into()))
+}
+
+// Load private key from file.
+fn load_private_key(filename: &str) -> io::Result<rustls::PrivateKey> {
+    // Open keyfile.
+    let keyfile = fs::File::open(filename)
+        .map_err(|e| io_error(format!("failed to open {}: {}", filename, e).into()))?;
+    let mut reader = io::BufReader::new(keyfile);
+
+    // Load and return a single private key.
+    let keys = pemfile::rsa_private_keys(&mut reader)
+        .map_err(|_| io_error("failed to load private key".into()))?;
+    if keys.len() != 1 {
+        return Err(io_error("expected a single private key".into()));
+    }
+    Ok(keys[0].clone())
+}
+
+struct HyperAcceptor<'a> {
+    acceptor: Pin<Box<dyn futures_util::stream::Stream<Item = Result<TlsStream<TcpStream>, io::Error>> + 'a>>,
+}
+
+impl hyper::server::accept::Accept for HyperAcceptor<'_> {
+    type Conn = TlsStream<TcpStream>;
+    type Error = io::Error;
+
+    fn poll_accept(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context,
+    ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
+        Pin::new(&mut self.acceptor).poll_next(cx)
+    }
 }
 
 fn spawn_server<S>(storage: S, addr: &SocketAddr) -> impl Server
@@ -306,7 +486,6 @@ where
     Error: From<S::Error>,
 {
     let storage = Arc::new(storage);
-
     let new_service = make_service_fn(move |socket: &AddrStream| {
         // Create our app.
         let service = App::new(storage.clone());
@@ -314,6 +493,77 @@ where
         // Add logging middleware
         future::ok::<_, Infallible>(Logger::new(socket.remote_addr(), service))
     });
-
     hyper::Server::bind(&addr).serve(new_service)
+}
+
+async fn spawn_server_https<S>(storage: S, addr: &SocketAddr,enable_https:bool,
+    ssl_cert:Option<String>,
+    ssl_key:Option<String>) -> Result<(), Box<dyn std::error::Error>>
+where
+    S: Storage + Send + Sync + 'static,
+    S::Error: Into<Error>,
+    Error: From<S::Error>,
+{
+    let storage = Arc::new(storage);
+    let mut tls_cfg = None;
+
+    if enable_https && ssl_cert.is_some() && ssl_key.is_some()
+    {
+        //copied from https://github.com/rustls/hyper-rustls/blob/master/examples/server.rs
+        // Build TLS configuration.
+
+        // Load public certificate.
+        let certs = load_certs(&ssl_cert.unwrap_or("".to_string()));
+        
+        // Load private key.
+        let key = load_private_key(&ssl_key.unwrap_or("".to_string()));
+
+        if certs.is_ok() && key.is_ok()
+        {
+            let mut cfg = rustls::ServerConfig::new(rustls::NoClientAuth::new());
+            cfg.set_protocols(&[b"http/1.1".to_vec()]);
+
+            // Select a certificate to use.
+            if cfg.set_single_cert(certs.unwrap(), key.unwrap()).is_ok()
+            {
+                tls_cfg = Some(std::sync::Arc::new(cfg)) 
+            }
+        }
+    }
+
+    let new_service = make_service_fn(move |socket: &TlsStream<TcpStream>| {
+        // Create our app.
+        let service = App::new(storage.clone());
+
+        // Add logging middleware
+        future::ok::<_, Infallible>(Logger::new(socket.get_ref().0.peer_addr().unwrap(), service))
+    });
+
+    if tls_cfg.is_none()
+    {
+        return Err(Box::new(io_error("Tls config failed!".into())));
+    }
+
+     // Create a TCP listener via tokio.
+     let tcp = TcpListener::bind(&addr).await?;
+     let tls_acceptor = TlsAcceptor::from(tls_cfg.unwrap());
+     // Prepare a long-running future stream to accept and serve clients.
+     let incoming_tls_stream = stream! {
+         loop {
+             let (socket, _) = tcp.accept().await?;
+             let stream = tls_acceptor.accept(socket).map_err(|e| {
+                 println!("[!] Voluntary server halt due to client-connection error...");
+                 // Errors could be handled here, instead of server aborting.
+                 // Ok(None)
+                 io_error(format!("TLS Error: {:?}", e))
+             });
+             yield stream.await;
+         }
+     };
+
+    hyper::Server::builder(HyperAcceptor {
+        acceptor: Box::pin(incoming_tls_stream),
+    })
+    .serve(new_service).await?;
+    Ok(())
 }
